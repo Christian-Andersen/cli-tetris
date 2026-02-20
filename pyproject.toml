@@ -1,0 +1,25 @@
+[project]
+name = "cli-tetris"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "curtsies>=0.4.3",
+    "numpy>=2.4.2",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "COM812",  # missing-trailing-comma
+  "T20",  # flake8-print
+  "ERA",  # eradicate
+  "D",  # docstrings
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
