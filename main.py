@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 from random import randint
-from typing import TYPE_CHECKING
+from typing import ClassVar
 
 import numpy as np
-from curtsies import Input
-
-if TYPE_CHECKING:
-    from curtsies.events import Event
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Center, Vertical
+from textual.widgets import Digits, Footer, Header, Static
 
 WIDTH = 10
 HEIGHT = 20
@@ -28,32 +30,25 @@ class GameState:
         self.score = 0
         self.game_over = False
 
-    def progress_game(self, user_input: str | Event | None) -> None:
+    def move_down(self) -> bool:
+        """Moves tetro down. Returns True if it combined."""
         if self.game_over:
-            print("GAME OVER")
+            return False
+        self.y += 1
+        if self.has_overlap():
+            self.y -= 1
+            self.combine()
+            return True
+        return False
+
+    def handle_down(self) -> None:
+        if self.game_over:
             return
-        match user_input:
-            case None:
-                self._move_down()
-            case "<DOWN>":
-                self._handle_down()
-            case "<UP>":
-                self._rotate()
-            case "<SPACE>":
-                self._drop()
-            case "<LEFT>":
-                self._move_left()
-            case "<RIGHT>":
-                self._move_right()
-
-        self._check_bounds()
-        self.print_board()
-
-    def _handle_down(self) -> None:
-        self._move_down()
+        self.move_down()
         if (self.y + self.tetro.shape[0]) == HEIGHT:
             self.combine()
-        self._move_down()
+        self.move_down()
+        self._check_bounds()
 
     def _check_bounds(self) -> None:
         if (self.y + self.tetro.shape[0]) >= HEIGHT:
@@ -61,30 +56,32 @@ class GameState:
                 self.y = HEIGHT - self.tetro.shape[0]
             self.combine()
 
-    def _move_down(self) -> None:
-        self.y += 1
-        if self.has_overlap():
-            self.y -= 1
-            self.combine()
-
-    def _rotate(self) -> None:
+    def rotate(self) -> None:
+        if self.game_over:
+            return
         self.tetro = np.rot90(self.tetro, k=1)
         if self.has_overlap():
             self.tetro = np.rot90(self.tetro, k=3)
 
-    def _drop(self) -> None:
+    def drop(self) -> None:
+        if self.game_over:
+            return
         while ((self.y + self.tetro.shape[0] - 1) != HEIGHT) and (not self.has_overlap()):
             self.y += 1
         self.y -= 1
         self.combine()
 
-    def _move_left(self) -> None:
+    def move_left(self) -> None:
+        if self.game_over:
+            return
         if self.x > 0:
             self.x -= 1
             if self.has_overlap():
                 self.x += 1
 
-    def _move_right(self) -> None:
+    def move_right(self) -> None:
+        if self.game_over:
+            return
         if (self.x + self.tetro.shape[1]) < WIDTH:
             self.x += 1
             if self.has_overlap():
@@ -130,8 +127,8 @@ class GameState:
             shape_board[y_start:y_end, x_start:x_end] = self.tetro[tetro_y_start:tetro_y_end, tetro_x_start:tetro_x_end]
         return shape_board
 
-    def print_board(self) -> None:
-        """print board and shape onto console"""
+    def get_board_string(self) -> str:
+        """Returns string representation of the board"""
         temp_y = self.y
         while ((self.y + self.tetro.shape[0]) < HEIGHT) and (not self.has_overlap()):
             self.y += 1
@@ -140,30 +137,102 @@ class GameState:
         shadow_print = self.tetro_board()
         self.y = temp_y
         to_print = np.logical_or(self.board, self.tetro_board())
-        print("\u2597" + 2 * WIDTH * "\u2584" + "\u2596")
+
+        lines = []
+        lines.append("\u2597" + 2 * WIDTH * "\u2584" + "\u2596")
         for row_idx in range(to_print.shape[0]):
-            print("\u2590", end="")
+            line = ["\u2590"]
             for col_idx in range(to_print.shape[1]):
                 if to_print[row_idx, col_idx]:
-                    print(2 * "\u2593", end="")
+                    line.append(2 * "\u2593")
                 elif shadow_print[row_idx, col_idx]:
-                    print(2 * "\u25af", end="")
+                    line.append(2 * "\u25af")
                 else:
-                    print(2 * " ", end="")
-            print("\u258c\n", end="")
-        print("\u259d" + 2 * WIDTH * "\u2580" + "\u2598")
-        print(f"SCORE: {self.score}")
+                    line.append(2 * " ")
+            line.append("\u258c")
+            lines.append("".join(line))
+        lines.append("\u259d" + 2 * WIDTH * "\u2580" + "\u2598")
+        if self.game_over:
+            lines.append("   GAME OVER   ")
+        return "\n".join(lines)
 
 
-def main() -> None:
-    with Input() as input_generator:
-        game = GameState()
-        while True:
-            if out := input_generator.send(0.2):
-                game.progress_game(out)
-            else:
-                game.progress_game(None)
+class TetrisApp(App):
+    TITLE: ClassVar[str] = "Tetris"
+    CSS: ClassVar[str] = """
+    Screen {
+        align: center middle;
+    }
+    #game-container {
+        width: 40;
+        height: 25;
+        border: heavy $primary;
+        align: center middle;
+    }
+    #board {
+        width: auto;
+        height: auto;
+        content-align: center middle;
+    }
+    #score-label {
+        width: auto;
+        margin-top: 1;
+    }
+    """
+
+    BINDINGS: ClassVar[list[Binding]] = [
+        Binding("left", "move_left", "Left"),
+        Binding("right", "move_right", "Right"),
+        Binding("up", "rotate", "Rotate"),
+        Binding("down", "move_down", "Down"),
+        Binding("space", "drop", "Drop"),
+        Binding("q", "quit", "Quit"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Vertical(id="game-container"):
+            with Center():
+                yield Static(id="board")
+            with Center():
+                yield Digits("0", id="score")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.game = GameState()
+        self.update_board()
+        self.set_interval(0.5, self.tick)
+
+    def tick(self) -> None:
+        if not self.game.game_over:
+            self.game.move_down()
+            self.update_board()
+
+    def update_board(self) -> None:
+        self.query_one("#board", Static).update(self.game.get_board_string())
+        self.query_one("#score", Digits).update(str(self.game.score))
+
+    def action_move_left(self) -> None:
+        self.game.move_left()
+        self.update_board()
+
+    def action_move_right(self) -> None:
+        self.game.move_right()
+        self.update_board()
+
+    def action_rotate(self) -> None:
+        self.game.rotate()
+        self.update_board()
+
+    def action_move_down(self) -> None:
+        self.game.handle_down()
+        self.update_board()
+
+    def action_drop(self) -> None:
+        self.game.drop()
+        self.update_board()
 
 
 if __name__ == "__main__":
-    main()
+    app = TetrisApp()
+    app.run()
