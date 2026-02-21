@@ -6,7 +6,7 @@ from typing import ClassVar
 import numpy as np
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Center, Vertical
+from textual.containers import Center, Horizontal, Vertical
 from textual.widgets import Digits, Footer, Header, Static
 
 WIDTH = 10
@@ -25,8 +25,10 @@ SHAPES = [
 class GameState:
     def __init__(self) -> None:
         self.board = np.zeros((HEIGHT, WIDTH), dtype=bool)
-        self.tetro, self.x = SHAPES[randint(0, 6)]  # noqa: S311
-        self.y = 0
+        self.next_tetro, _ = SHAPES[randint(0, 6)]  # noqa: S311
+        self.held_tetro: np.ndarray | None = None
+        self.can_hold = True
+        self.new_shape()
         self.score = 0
         self.game_over = False
 
@@ -59,9 +61,20 @@ class GameState:
     def rotate(self) -> None:
         if self.game_over:
             return
+        original_tetro = self.tetro.copy()
+        original_x = self.x
+
         self.tetro = np.rot90(self.tetro, k=1)
-        if self.has_overlap():
-            self.tetro = np.rot90(self.tetro, k=3)
+
+        # Try original position, then shifts to make it fit
+        for dx in [0, -1, 1, -2, 2]:
+            self.x = original_x + dx
+            if not self.has_overlap():
+                return
+
+        # If no position works, revert
+        self.x = original_x
+        self.tetro = original_tetro
 
     def drop(self) -> None:
         if self.game_over:
@@ -87,6 +100,21 @@ class GameState:
             if self.has_overlap():
                 self.x -= 1
 
+    def hold_piece(self) -> None:
+        if self.game_over or not self.can_hold:
+            return
+
+        if self.held_tetro is None:
+            self.held_tetro = self.tetro
+            self.new_shape()
+        else:
+            self.held_tetro, self.tetro = self.tetro, self.held_tetro
+            self.x = WIDTH // 2 - self.tetro.shape[1] // 2
+            self.y = 0
+            if self.has_overlap():
+                self.game_over = True
+        self.can_hold = False
+
     def combine(self) -> None:
         self.board = np.logical_or(self.board, self.tetro_board())
         for row in reversed(range(HEIGHT)):
@@ -105,9 +133,13 @@ class GameState:
 
     def new_shape(self) -> None:
         """Creates new shape, also sets game_over flag to true if needed"""
-        self.tetro, self.x = SHAPES[randint(0, 6)]  # noqa: S311
+        self.tetro = self.next_tetro
+        self.x = WIDTH // 2 - self.tetro.shape[1] // 2
         self.y = 0
-        self.game_over = self.has_overlap()
+        self.next_tetro, _ = SHAPES[randint(0, 6)]  # noqa: S311
+        self.can_hold = True
+        if self.has_overlap():
+            self.game_over = True
 
     def tetro_board(self) -> np.ndarray:
         """Returns a board with tetro on it, handling out of bounds safely"""
@@ -164,18 +196,38 @@ class TetrisApp(App):
         align: center middle;
     }
     #game-container {
-        width: 40;
+        layout: horizontal;
+        width: 60;
         height: 25;
         border: heavy $primary;
         align: center middle;
     }
+    #main-panel {
+        width: 40;
+        height: 100%;
+        align: center middle;
+    }
+    #side-panel {
+        width: 20;
+        height: 100%;
+        border-left: solid $primary-muted;
+        padding: 1 2;
+    }
+    .side-label {
+        text-style: bold;
+        margin-top: 1;
+    }
+    .piece-preview {
+        height: 5;
+        content-align: center middle;
+        border: panel $primary-muted;
+        margin-bottom: 1;
+    }
     #board {
         width: auto;
         height: auto;
-        content-align: center middle;
     }
-    #score-label {
-        width: auto;
+    #score {
         margin-top: 1;
     }
     """
@@ -186,15 +238,21 @@ class TetrisApp(App):
         Binding("up", "rotate", "Rotate"),
         Binding("down", "move_down", "Down"),
         Binding("space", "drop", "Drop"),
+        Binding("c", "hold", "Hold"),
         Binding("q", "quit", "Quit"),
     ]
 
     def compose(self) -> ComposeResult:
         yield Header()
-        with Vertical(id="game-container"):
-            with Center():
+        with Horizontal(id="game-container"):
+            with Vertical(id="main-panel"), Center():
                 yield Static(id="board")
-            with Center():
+            with Vertical(id="side-panel"):
+                yield Static("HOLD", classes="side-label")
+                yield Static(id="hold-piece", classes="piece-preview")
+                yield Static("NEXT", classes="side-label")
+                yield Static(id="next-piece", classes="piece-preview")
+                yield Static("SCORE", classes="side-label")
                 yield Digits("0", id="score")
         yield Footer()
 
@@ -208,9 +266,20 @@ class TetrisApp(App):
             self.game.move_down()
             self.update_board()
 
+    def _get_piece_string(self, tetro: np.ndarray | None) -> str:
+        if tetro is None:
+            return ""
+        lines = []
+        for row in tetro:
+            line = [2 * "\u2593" if cell else "  " for cell in row]
+            lines.append("".join(line))
+        return "\n".join(lines)
+
     def update_board(self) -> None:
         self.query_one("#board", Static).update(self.game.get_board_string())
         self.query_one("#score", Digits).update(str(self.game.score))
+        self.query_one("#next-piece", Static).update(self._get_piece_string(self.game.next_tetro))
+        self.query_one("#hold-piece", Static).update(self._get_piece_string(self.game.held_tetro))
 
     def action_move_left(self) -> None:
         self.game.move_left()
@@ -230,6 +299,10 @@ class TetrisApp(App):
 
     def action_drop(self) -> None:
         self.game.drop()
+        self.update_board()
+
+    def action_hold(self) -> None:
+        self.game.hold_piece()
         self.update_board()
 
 
