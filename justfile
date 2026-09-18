@@ -1,6 +1,5 @@
 alias c := check
 alias r := run
-alias ci := continuous_integration
 
 [private]
 default:
@@ -15,5 +14,5 @@ run *args:
 audit:
     uv run -- prek run audit
 
-continuous_integration:
+ci:
     uv run -- prek run --all-files --stage manual
