@@ -1,0 +1,13 @@
+on:
+  push:
+    branches: [main]
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install Nix
+        uses: https://github.com/DeterminateSystems/nix-installer-action@v23
+      - name: Run CI
+        run: nix develop --command just ci
