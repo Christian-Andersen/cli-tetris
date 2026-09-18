@@ -190,7 +190,7 @@ class GameState:
 
 
 class TetrisApp(App):
-    TITLE: ClassVar[str] = "Tetris"
+    TITLE: str = "Tetris"
     CSS: ClassVar[str] = """
     Screen {
         align: center middle;
