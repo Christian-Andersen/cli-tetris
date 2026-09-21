@@ -7,6 +7,22 @@
     "enabled": true,
     "extends": ["schedule:monthly"]
   },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update `_VERSION` variable pins in Makefiles, justfiles, and `.env` templates using a `# renovate: datasource=... depName=...` hint comment above the assignment. Handles `=`, `:=`, and `?=` assignment styles.",
+      "managerFilePatterns": [
+        "**/[Mm]akefile",
+        "**/GNUMakefile",
+        "**/*.mk",
+        "**/justfile",
+        "**/.env*"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-zA-Z0-9-._]+?) depName=(?<depName>[^\\s]+?)(?: (?:packageName)=(?<packageName>[^\\s]+?))?(?: versioning=(?<versioning>[^\\s]+?))?(?: extractVersion=(?<extractVersion>[^\\s]+?))?(?: registryUrl=(?<registryUrl>[^\\s]+?))?\\s+[A-Za-z0-9_]+?_VERSION\\s*:*\\??=\\s*[\"']?(?<currentValue>.+?)[\"']?\\s"
+      ]
+    }
+  ],
   "packageRules": [
     {
       "description": "Group Nix flake input updates (e.g. nixpkgs) into a single PR.",
