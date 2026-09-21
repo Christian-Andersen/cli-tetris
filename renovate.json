@@ -28,6 +28,11 @@
       "description": "Group Nix flake input updates (e.g. nixpkgs) into a single PR.",
       "matchManagers": ["nix"],
       "groupName": "Nix flake inputs"
+    },
+    {
+      "description": "Group CI workflow action updates (checkout, nix-installer-action, ...) into a single PR.",
+      "matchManagers": ["github-actions"],
+      "groupName": "CI workflow actions"
     }
   ]
 }
