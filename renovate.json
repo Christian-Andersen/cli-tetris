@@ -6,5 +6,12 @@
   "lockFileMaintenance": {
     "enabled": true,
     "extends": ["schedule:monthly"]
-  }
+  },
+  "packageRules": [
+    {
+      "description": "Group Nix flake input updates (e.g. nixpkgs) into a single PR.",
+      "matchManagers": ["nix"],
+      "groupName": "Nix flake inputs"
+    }
+  ]
 }
