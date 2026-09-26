@@ -1,38 +1,26 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
   "nix": {
     "enabled": true
   },
   "lockFileMaintenance": {
-    "enabled": true,
-    "extends": ["schedule:monthly"]
+    "enabled": true
   },
-  "customManagers": [
-    {
-      "customType": "regex",
-      "description": "Update `_VERSION` variable pins in Makefiles, justfiles, and `.env` templates using a `# renovate: datasource=... depName=...` hint comment above the assignment. Handles `=`, `:=`, and `?=` assignment styles.",
-      "managerFilePatterns": [
-        "**/[Mm]akefile",
-        "**/GNUMakefile",
-        "**/*.mk",
-        "**/justfile",
-        "**/.env*"
-      ],
-      "matchStrings": [
-        "# renovate: datasource=(?<datasource>[a-zA-Z0-9-._]+?) depName=(?<depName>[^\\s]+?)(?: (?:packageName)=(?<packageName>[^\\s]+?))?(?: versioning=(?<versioning>[^\\s]+?))?(?: extractVersion=(?<extractVersion>[^\\s]+?))?(?: registryUrl=(?<registryUrl>[^\\s]+?))?\\s+[A-Za-z0-9_]+?_VERSION\\s*:*\\??=\\s*[\"']?(?<currentValue>.+?)[\"']?\\s"
-      ]
-    }
-  ],
   "packageRules": [
     {
-      "description": "Group Nix flake input updates (e.g. nixpkgs) into a single PR.",
+      "description": "Group Nix flake input updates into a single PR",
       "matchManagers": ["nix"],
-      "groupName": "Nix flake inputs"
+      "matchUpdateTypes": ["digest"],
+      "groupName": "Nix flake inputs",
+      "groupSlug": "nix-flake-inputs"
     },
     {
-      "description": "Group CI workflow action updates (checkout, nix-installer-action, ...) into a single PR.",
+      "description": "Group non-major CI action updates in .forgejo/workflows; major bumps get their own PR",
       "matchManagers": ["github-actions"],
-      "groupName": "CI workflow actions"
+      "matchUpdateTypes": ["digest", "patch", "minor"],
+      "groupName": "CI workflow actions",
+      "groupSlug": "ci-workflow-actions"
     }
   ]
 }
