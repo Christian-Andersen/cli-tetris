@@ -47,9 +47,6 @@ class GameState:
         if self.game_over:
             return
         self.move_down()
-        if (self.y + self.tetro.shape[0]) == HEIGHT:
-            self.combine()
-        self.move_down()
         self._check_bounds()
 
     def _check_bounds(self) -> None:
@@ -95,7 +92,7 @@ class GameState:
     def move_right(self) -> None:
         if self.game_over:
             return
-        if (self.x + self.tetro.shape[1]) < WIDTH:
+        if (self.x + self.tetro.shape[1]) <= WIDTH:
             self.x += 1
             if self.has_overlap():
                 self.x -= 1
@@ -117,11 +114,13 @@ class GameState:
 
     def combine(self) -> None:
         self.board = np.logical_or(self.board, self.tetro_board())
-        for row in reversed(range(HEIGHT)):
-            if self.board[row].all():
-                self.score += 1
-                self.board[1 : (row + 1), :] = self.board[0:row, :].copy()
-                self.board[0, :] = False
+        full_rows = sorted([row for row in range(HEIGHT) if self.board[row].all()])
+        num_full = len(full_rows)
+        if num_full > 0:
+            # Remove full rows and prepend empty rows at the top
+            self.board = np.delete(self.board, full_rows, axis=0)
+            self.board = np.vstack([np.zeros((num_full, WIDTH), dtype=bool), self.board])
+            self.score += num_full
         self.new_shape()
 
     def has_overlap(self) -> bool:
@@ -161,13 +160,29 @@ class GameState:
 
     def get_board_string(self) -> str:
         """Returns string representation of the board"""
-        temp_y = self.y
-        while ((self.y + self.tetro.shape[0]) < HEIGHT) and (not self.has_overlap()):
-            self.y += 1
-        if self.has_overlap():
-            self.y -= 1
-        shadow_print = self.tetro_board()
-        self.y = temp_y
+        # Compute the tetro's landing (shadow) position using a local variable
+        # so that self.y is not modified and both shadow and tetro use the same y
+        y = self.y
+        while ((y + self.tetro.shape[0]) < HEIGHT) and (not self.has_overlap()):
+            y += 1
+        # y is now the position where overlap would occur; shadow is at y-1
+        # if the tetro moved, otherwise at self.y
+        shadow_y = y - 1 if y > self.y else self.y
+
+        # Build shadow board at shadow_y
+        shape_board = np.zeros((HEIGHT, WIDTH), dtype=bool)
+        y_start = max(0, shadow_y)
+        y_end = min(HEIGHT, shadow_y + self.tetro.shape[0])
+        x_start = max(0, self.x)
+        x_end = min(WIDTH, self.x + self.tetro.shape[1])
+        tetro_y_start = max(0, -shadow_y)
+        tetro_y_end = tetro_y_start + (y_end - y_start)
+        tetro_x_start = max(0, -self.x)
+        tetro_x_end = tetro_x_start + (x_end - x_start)
+        if y_start < y_end and x_start < x_end:
+            shape_board[y_start:y_end, x_start:x_end] = self.tetro[tetro_y_start:tetro_y_end, tetro_x_start:tetro_x_end]
+        shadow_print = shape_board
+
         to_print = np.logical_or(self.board, self.tetro_board())
 
         lines = []
